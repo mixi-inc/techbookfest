@@ -1,0 +1,43 @@
+name: Build and Deploy Docker Image
+
+on:
+  pull_request:
+    paths:
+    - '**/Dockerfile'
+    - '.github/workflows/docker.yml'
+  push:
+    branches:
+    - master
+    tags:
+    - v*
+    paths:
+    - '**/Dockerfile'
+    - '.github/workflows/docker.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-18.04
+    steps:
+    - uses: actions/checkout@v1
+      with:
+        fetch-depth: 1
+
+    - name: Build Docker Image
+      run: docker build -t techbookfest . template
+
+    - name: Run Docker Image
+      run: docker run --rm -v `pwd`/template:/work techbookfest /bin/sh -c "cd /work && textlint *.re && review-pdfmaker config.yml"
+
+    - name: Push Docker Image
+      if: github.ref == 'refs/heads/master'
+      run: |
+        echo ${{ secrets.GITHUB_TOKEN }} | docker login docker.pkg.github.com -u matoi-chan --password-stdin
+        docker tag techbookfest docker.pkg.github.com/${GITHUB_REPOSITORY}/review
+        docker push docker.pkg.github.com/${GITHUB_REPOSITORY}/review:latest
+
+    - name: Push Docker Image (tag)
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        echo ${{ secrets.GITHUB_TOKEN }} | docker login docker.pkg.github.com -u matoi-chan --password-stdin
+        docker tag techbookfest docker.pkg.github.com/${GITHUB_REPOSITORY}/review:${GITHUB_REF#refs/tags/}
+        docker push docker.pkg.github.com/${GITHUB_REPOSITORY}/review:${GITHUB_REF#refs/tags/}
